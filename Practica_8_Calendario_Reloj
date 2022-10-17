@@ -1,0 +1,211 @@
+/*
+ * Práctica 8_Calendario_Reloj.c
+ *
+ * Created: 16/10/2022 12:09:21 p. m.
+ * Author : Cesar Y Antonio
+ */ 
+#define  F_CPU 12000000UL
+#include <avr/io.h>
+#include "lcd/lcd.h"
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+//////////////////////////////////////////////////////////////////////////
+//Condicional
+bool enter=true;
+bool stop=true;
+//Keypad
+uint8_t read,minikey=1;
+char scrib[10];
+char lec;
+char array_calendar[16];
+char array_clock[16];
+char teclas[16]={'1','4','7','*','2','5','8','0','3','6','9','#','A','B','C','D'}; //Funciona Unicamente en Proteus
+//char teclas[16]={'1','2','3','A','4','5','6','B','7','8','9','C','*','0','#','D'};
+//Clock ans Date
+uint8_t s,m,h,d,mt;
+uint16_t y;
+uint16_t save[5]; //j
+uint8_t NumDia; //Numero de dias respecto al mes 
+uint8_t ms;//Desbordes
+char segundos[10],minutos[10],horas[10],dias[10],meses[10],years[10];
+//Configuración
+uint8_t dig=0;
+//Pivotes
+uint8_t i,j,l,f,g;
+
+void Puertos(void){
+	DDRA|=(1<<PINA4)|(0<<PINA3)|(0<<PINA2)|(0<<PINA1)|(0<<PINA0);
+	PORTA=(1<<PINA4);
+}
+
+void Interrupciones(void){
+	//Keypad_
+	EICRA|=(1<<ISC01)|(1<<ISC00);
+	EIMSK|=(1<<INT0);
+	//Timer
+	TCCR0A=0x00;				 //Configura el Normal Mode y clear and compare match
+	TCCR0B|=(1<<CS02)|(1<<CS00); //Registro control timer B con prescaler a 1024
+	TCNT0=0x00;					 //Timer counter en 0x00
+	TIMSK0|=(1<<TOIE0);
+	
+	sei();
+}
+
+void Bisiesto(void){
+	 y=save[2];
+	 if ((y%4==0)&((y%100!=0)|(y%400==0))){NumDia=29;}
+	 else{NumDia=28;}
+	/*if(año%4==0 and año%100!=0 or año%400==0):
+	print(f"\n El año {año} es Bisiesto")
+	else:
+	print(f"\n El año {año} NO es Bisiesto")*/
+}
+
+void NumDias(void){
+	if((mt==1)|(mt==3)|(mt==5)|(mt==7)|(mt==8)|(mt==10)|(mt==12)){NumDia = 31;}
+	else if(mt==2){Bisiesto();}
+	else{NumDia=30;}
+}
+
+void mov_int(void){
+	switch(j){
+		case 0: l=4; f=1; g=2; break;
+		case 1: l=1; f=1; g=2; break;
+		case 2: l=9; f=0; g=4; break;
+		case 3: l=4; f=0; g=2; break;
+		case 4: l=1; f=0; g=2; break;
+		default: break;
+	}
+	if(i==g){lcd_gotoxy(l,f);}
+	else {lcd_gotoxy((l-i),f);}
+}
+
+void out_lcd(void){
+	if (stop==true){
+		if (s>59){s=0;m++;}
+		if (m>59){m=0;h++;}
+		if (h>23){h=0;d++;}
+		NumDias();
+		if (d>NumDia){d=1;mt++;}
+		if (mt>12){mt=1;y++;}
+		//if (y>99){y=0;}
+	}
+	else{
+		m=save[0]; h=save[1]; //Clock
+		d=save[4]; mt=save[3]; y=save[2]; //Calendar
+	}
+	//Segundos
+	if (s<=9){sprintf(segundos,"0%d",s);}
+	else{sprintf(segundos,"%d",s);}
+	//Minutos
+	if (m<=9){sprintf(minutos,"0%d",m);}
+	else{sprintf(minutos,"%d",m);}
+	//Horas
+	if (h<=9){sprintf(horas,"0%d",h);}
+	else{sprintf(horas,"%d",h);}
+	//Dias
+	if (d<=9){sprintf(dias,"0%d",d);}
+	else{sprintf(dias,"%d",d);}
+	//Meses
+	if (mt<=9){sprintf(meses,"0%d",mt);}
+	else{sprintf(meses,"%d",mt);}
+	//Años
+	if (y<9){sprintf(years,"000%d",y);}
+	else if (y<99){sprintf(years,"00%d",y);}
+	else if (y<999){sprintf(years,"0%d",y);}
+	else{sprintf(years,"%d",y);}
+	//////////////////////////////////////////////////////////////////////////
+	lcd_clrscr();
+	lcd_home();
+	sprintf(array_calendar,"%s/%s/%s",dias,meses,years);
+	lcd_gotoxy(0,0);
+	lcd_puts(array_calendar);
+	sprintf(array_clock,"%s:%s:%s",horas,minutos,segundos);
+	lcd_gotoxy(0,1);
+	lcd_puts(array_clock);
+	if (stop!=true){mov_int();}
+}
+
+void Configuracion(void){
+	if (i<g){
+		scrib[i]=lec;
+		save[j]=atoi(scrib);
+		i++;
+		out_lcd();
+	}
+	else{
+		i=0; 
+		memset(scrib,'\0',(sizeof(scrib)));
+			out_lcd();
+	} 
+}
+
+void caso1(void){
+	if (j<4){j++;}
+	else{j=0;}
+	i=0;
+	mov_int();
+	memset(scrib,'\0',(sizeof(scrib)));
+}
+
+void caso2(void){
+	minikey^=1; 
+	if(minikey==0){
+		stop=false;
+		lcd_init(LCD_DISP_ON_CURSOR_BLINK);
+		out_lcd();
+		mov_int();
+		}
+	else{
+		stop=true; ms=0; s=0; 
+		lcd_init(LCD_DISP_ON); 
+		out_lcd();
+	}
+}
+
+void caso3(void){
+	if (stop==false) {
+	if((lec!='A')|(lec!='B')|(lec!='C')|(lec!='D')){ Configuracion();}
+	}
+}
+
+void keypad(void) {
+	lec=teclas[read];
+	 switch(lec){
+		 case '#': caso1(); break;
+		 case '*': caso2();break;
+		 default: caso3(); break;
+	}
+}
+
+ISR(INT0_vect){
+	PORTA&=~(1<<PINA4);
+	read=0x0F&PINA;
+	keypad();
+	PORTA|=(1<<PINA4);
+}
+
+ISR(TIMER0_OVF_vect){
+	ms++;
+	if (ms>45) {
+		 ms=0; if(stop==true) {s++; out_lcd();}
+	 }
+}
+
+int main(void)
+{	
+	Puertos();
+	Interrupciones();
+	lcd_init(LCD_DISP_ON);
+	lcd_home();
+	out_lcd();
+    /* Replace with your application code */
+    while (1) 
+    {
+    }
+}

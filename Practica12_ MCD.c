@@ -69,12 +69,10 @@ void out_lcd(void){//Muestra las acciones en el lcd
 	lcd_clrscr();
 	lcd_home();
 	switch(txt){
-		case 1: lcd_puts("Set Duty Cycle");		break;
-		case 2: lcd_puts("Save Duty Cycle");	break;	
-		case 3: lcd_puts("Only 0%-100%");		break;
+		case 1: lcd_puts("Set (0-100)");		break;
+		case 2: lcd_puts("Save D.Cycle");		break;	
 		case 4: lcd_puts("Right Turn");			break;
 		case 5: lcd_puts("Left Turn");			break;
-		case 6: lcd_puts("Press '#' ");			break;
 		case 7: lcd_puts("Stop Motor");			break;
 		case 8:	lcd_puts("Press C-Help");		break;
 		default: break;
@@ -87,6 +85,11 @@ void out_lcd(void){//Muestra las acciones en el lcd
 void stop_motor(void){//Detiene el motor
 	okset=false; start=false;
 	PORTL=0x00;
+}
+
+void Clear(void){
+	i=0; new_pwm=0;
+	memset(scrib,'\0',(sizeof(scrib)));
 }
 
 void Right(void){ //Set-Right
@@ -116,38 +119,28 @@ void Left(void){ //Set-Left
 
 void Set(void){//Configura el ciclo de trabajo
 	txt=1;
-	okset=false; start=false;
+	okset=false;
+	start=false;
 	stop_motor();			//Detiene el motor para configurar
+	Clear();
 	out_lcd();
 }
 
 void Enter(void){//Setea el nuevo Ciclo de trabajo
-	if (new_pwm<=100){
-		okset=true; start=true; //Permite iniciar los giros
-		OCR4A=(new_pwm*40)/(100); //Propocionalidad con el valor maximo del OCR4A
-		txt=2;
-	}
-	else{//Si el valor es mas al posible se rechaza
-		txt=3; 
-		okset=false; 
-		start=false;
-		out_lcd();
-		_delay_ms(1000);
-		txt=1;
-	}
+	okset=true; start=true; //Permite iniciar los giros
+	OCR4A=(new_pwm*40)/(100); //Propocionalidad con el valor maximo del OCR4A
+	txt=2;
 	out_lcd();
 	i=0;
 	memset(scrib,'\0',(sizeof(scrib)));
 }
 
 void Input(void){//Recupera datos ingrsados del keypad y se convietren e int de 8 bits
-	if(i<3){
-		scrib[i]=lec;
-		new_pwm=atoi(scrib);
-		out_lcd();
-		i++;
-	}
-	else{ txt=6; out_lcd(); }
+	scrib[i]=lec;
+	new_pwm=atoi(scrib);
+	i++;
+	if (new_pwm>100){Clear();}
+	out_lcd();
 }
 
 void Help(void){ //Manual Ayuda Usuario
@@ -163,10 +156,10 @@ void Help(void){ //Manual Ayuda Usuario
 void keypad(void){//Casos posibles con el Keypad
 	lec=teclas[read];
 	switch(lec){
-		case 'A': Right(); break; 
-		case 'B': Left(); break; 
+		case 'A': if(okset==true){Right();}; break; 
+		case 'B': if(okset==true){Left();} break; 
 		case '*': Set(); break; 
-		case '#': Enter(); break;
+		case '#': if(okset==false){Enter();} break;
 		case 'C': Help(); break; 
 		default:if(lec!='D'){Input();} break; //Input
 	}
